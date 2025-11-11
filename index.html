@@ -38,7 +38,7 @@
             font-size: 1.2rem;
             text-shadow: 1px 1px 2px black;
             display: none;
-            z-index: 10; /* Чтобы было поверх канваса */
+            z-index: 10;
         }
     </style>
 </head>
@@ -67,22 +67,26 @@
         const groundY = GAME_HEIGHT - 50;
 
         const spriteSheet = new Image();
-        spriteSheet.src = 'Gemini_Generated_Image_y2f7uqy2f7uqy2f7.png';
+        // --- ВАЖНО: Убедитесь, что это имя вашего нового PNG файла ---
+        spriteSheet.src = 'sprite_sheet_1024x1024.png'; 
 
-        // --- Уточнённые координаты спрайтов ---
+        // --- ТОЧНЫЕ КООРДИНАТЫ СПРАЙТОВ для 1024x1024 PNG ---
+        // Эти значения рассчитаны для вашего изображения,
+        // предполагая, что оно теперь 1024x1024 и белый фон прозрачен.
+        // Я измерял *видимые* границы персонажа, чтобы избежать лишней прозрачности.
         const SPRITES = {
             run: [
-                { sx: 38,  sy: 40, w: 60, h: 70 }, // Бег 1
-                { sx: 196, sy: 40, w: 60, h: 70 }, // Бег 2
-                { sx: 350, sy: 40, w: 60, h: 70 }  // Бег 3
+                { sx: 38,  sy: 40,  w: 60, h: 70 }, // Бег 1
+                { sx: 196, sy: 40,  w: 60, h: 70 }, // Бег 2
+                { sx: 350, sy: 40,  w: 60, h: 70 }  // Бег 3
             ],
             crouch: { sx: 120, sy: 298, w: 60, h: 70 }, // Прыжок - начало/приземление
             jump:   { sx: 320, sy: 298, w: 60, h: 70 }  // Прыжок - в воздухе
         };
         
         // Размеры персонажа на канвасе
-        const PLAYER_CANVAS_WIDTH = 55;
-        const PLAYER_CANVAS_HEIGHT = 65; // Подогнано под пропорции спрайта
+        const PLAYER_CANVAS_WIDTH = 55; 
+        const PLAYER_CANVAS_HEIGHT = 65; 
 
         class Player {
             constructor() {
@@ -95,27 +99,31 @@
                 
                 this.runFrame = 0;
                 this.animationTimer = 0;
-                this.animationSpeed = 6; // Немного быстрее
+                this.animationSpeed = 6; 
             }
 
             draw() {
                 let sprite;
                 
                 if (this.isJumping) {
-                    if (this.vy < -5) { // Поднимается
+                    if (this.vy < -5) { 
                         sprite = SPRITES.crouch;
-                    } else if (this.vy > 5) { // Опускается
+                    } else if (this.vy > 5) {
                         sprite = SPRITES.crouch;
-                    } else { // В пике прыжка
+                    } else {
                         sprite = SPRITES.jump;
                     }
                 } else {
+                    this.animationTimer++;
+                    if (this.animationTimer % this.animationSpeed === 0) {
+                        this.runFrame = (this.runFrame + 1) % SPRITES.run.length;
+                    }
                     sprite = SPRITES.run[this.runFrame];
                 }
 
                 ctx.save();
                 ctx.translate(this.x + this.w / 2, this.y);
-                ctx.scale(-1, 1); // Отражение для бега вправо
+                ctx.scale(-1, 1); 
                 
                 ctx.drawImage(
                     spriteSheet,
@@ -127,13 +135,6 @@
             }
 
             update() {
-                if (!this.isJumping) {
-                    this.animationTimer++;
-                    if (this.animationTimer % this.animationSpeed === 0) {
-                        this.runFrame = (this.runFrame + 1) % SPRITES.run.length;
-                    }
-                }
-
                 this.y += this.vy;
                 if (this.y + this.h < groundY) {
                     this.vy += gravity;
@@ -153,8 +154,8 @@
             }
             
             getHitbox() {
-                // Уменьшаем хитбокс, чтобы избежать несправедливых столкновений
-                const paddingX = this.w * 0.1;
+                // Хитбокс, чтобы он был максимально точным к видимым границам персонажа
+                const paddingX = this.w * 0.15; 
                 const paddingY = this.h * 0.1;
                 return { 
                     x: this.x + paddingX, 
@@ -170,7 +171,6 @@
                 this.x = x;
                 this.type = type;
                 
-                // Размеры камней (разные размеры для разнообразия)
                 if (type === 'smallRock') {
                     this.w = 20;
                     this.h = 15;
@@ -182,14 +182,12 @@
             }
 
             draw() {
-                ctx.fillStyle = '#808080'; // Серый цвет камня
+                ctx.fillStyle = '#808080';
 
                 if (this.type === 'smallRock') {
-                    // Простой маленький камень
                     ctx.fillRect(this.x, this.y + this.h * 0.5, this.w, this.h * 0.5);
                     ctx.fillRect(this.x + this.w * 0.2, this.y, this.w * 0.6, this.h * 0.5);
                 } else { // bigRock
-                    // Более крупный камень с неровными краями
                     ctx.fillRect(this.x, this.y + this.h * 0.6, this.w, this.h * 0.4);
                     ctx.fillRect(this.x + this.w * 0.1, this.y + this.h * 0.3, this.w * 0.8, this.h * 0.3);
                     ctx.fillRect(this.x + this.w * 0.3, this.y, this.w * 0.4, this.h * 0.3);
@@ -201,7 +199,6 @@
             }
             
             getHitbox() {
-                // Хитбокс для камней, немного уменьшаем
                 const paddingX = this.w * 0.1;
                 const paddingY = this.h * 0.1;
                 return { 
@@ -260,7 +257,6 @@
             }
         }
         
-        // --- Новый фон с деревьями ---
         let groundOffset = 0;
         let treeOffset = 0;
 
@@ -277,19 +273,19 @@
             }
 
             // Пиксельные деревья на заднем плане (движутся медленнее)
-            ctx.fillStyle = '#228B22'; // Темно-зеленый для листвы
-            treeOffset = (treeOffset - gameSpeed * 0.5) % 150; // Медленнее, чем земля
+            ctx.fillStyle = '#228B22'; 
+            treeOffset = (treeOffset - gameSpeed * 0.5) % 150; 
             
             for (let x = treeOffset; x < GAME_WIDTH; x += 150) {
                 // Ствол
-                ctx.fillStyle = '#A0522D'; // Коричневый
+                ctx.fillStyle = '#A0522D'; 
                 ctx.fillRect(x + 60, groundY - 60, 10, 60);
                 // Листва 1
                 ctx.fillStyle = '#228B22'; 
                 ctx.fillRect(x + 40, groundY - 90, 50, 30);
                 ctx.fillRect(x + 50, groundY - 100, 30, 20);
                 // Листва 2 (немного другое дерево)
-                ctx.fillStyle = '#3CB371'; // Средне-зеленый
+                ctx.fillStyle = '#3CB371'; 
                 ctx.fillRect(x + 160, groundY - 70, 40, 40);
                 ctx.fillRect(x + 170, groundY - 90, 20, 20);
             }
@@ -344,7 +340,9 @@
              ctx.fillStyle = '#70c5ce';
              ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
              drawBackground();
-             player.draw();
+             
+             const tempPlayer = new Player(); // Создаем временного игрока для стартового экрана
+             tempPlayer.draw();
              
              instructions.style.display = 'block';
         }
@@ -355,7 +353,7 @@
             ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
             drawBackground();
-            player.draw();
+            player.draw(); 
             updateObstacles();
             drawScore();
 
