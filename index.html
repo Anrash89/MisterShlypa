@@ -46,7 +46,7 @@
     #game {
       width: 100%;
       border-radius: 14px;
-      background: linear-gradient(to bottom, #3c4c6b 0%, #1a2635 40%, #101010 41%, #050505 100%);
+      background: #000;
       box-shadow: 0 10px 25px rgba(0,0,0,0.6);
       touch-action: none; /* чтобы тапы были управлением */
       display: block;
@@ -99,6 +99,58 @@
       font-size: 13px;
       text-align: center;
       pointer-events: none;
+      display: none;
+    }
+
+    .start-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+    }
+
+    .start-inner {
+      background: rgba(0,0,0,0.9);
+      padding: 18px 24px;
+      border-radius: 16px;
+      text-align: center;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.9);
+      max-width: 260px;
+      margin: auto;
+    }
+
+    .start-inner h1 {
+      font-size: 22px;
+      margin-bottom: 6px;
+      letter-spacing: 0.06em;
+    }
+
+    .start-inner p {
+      font-size: 12px;
+      opacity: 0.85;
+      margin-bottom: 10px;
+    }
+
+    #startBtn {
+      padding: 9px 24px;
+      border-radius: 999px;
+      border: none;
+      background: #e53935;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 15px;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.7);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s;
+      width: 100%;
+    }
+
+    #startBtn:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.85);
+      background: #c62828;
     }
 
     @media (max-width: 480px) {
@@ -120,10 +172,21 @@
       <div>Счёт: <span id="score">0</span></div>
       <div>Рекорд: <span id="best">0</span></div>
     </div>
+
     <div style="position:relative; width:100%;">
       <canvas id="game"></canvas>
-      <div id="message" class="message" style="display:none;"></div>
+      <div id="message" class="message"></div>
+
+      <!-- Стартовый экран -->
+      <div id="startScreen" class="start-overlay">
+        <div class="start-inner">
+          <h1>HAT RUNNER</h1>
+          <p>Жми пробел / ↑, кликай или тапай, чтобы прыгать через камни.</p>
+          <button id="startBtn">СТАРТ</button>
+        </div>
+      </div>
     </div>
+
     <div class="ui-bottom">
       <button id="jumpBtn">ПРЫЖОК / TAP</button>
       <div class="hint">
@@ -133,7 +196,6 @@
   </div>
 
   <script>
-    // ----- БАЗОВЫЕ НАСТРОЙКИ -----
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
 
@@ -141,8 +203,10 @@
     const bestEl = document.getElementById('best');
     const jumpBtn = document.getElementById('jumpBtn');
     const messageEl = document.getElementById('message');
+    const startScreen = document.getElementById('startScreen');
+    const startBtn = document.getElementById('startBtn');
 
-    // Виртуальное поле — рисуем в этих размерах, а потом масштабируем под экран
+    // Виртуальное поле
     const VW = 900;
     const VH = 400;
     let scaleX = 1;
@@ -164,29 +228,55 @@
 
       ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
     }
-
     window.addEventListener('resize', resizeCanvas);
 
-    // ----- СПРАЙТ -----
+    // Спрайты
     const sprite = new Image();
-    sprite.src = 'sprite_sheet_1024x1024.png'; // положи файл рядом с index.html
+    sprite.src = 'sprite_sheet_1024x1024.png';
 
-    const FRAME_COLS = 3;
-    const FRAME_ROWS = 2;
+    const bgImg = new Image();
+    bgImg.src = 'bg.png';
+
+    const rockImg = new Image();
+    rockImg.src = 'rock.png';
+
+    let spriteReady = false;
+    let bgReady = false;
+    let rockReady = false;
     let frameW = 0;
     let frameH = 0;
-    let spriteReady = false;
 
     sprite.onload = () => {
-      frameW = sprite.width / FRAME_COLS;
-      frameH = sprite.height / FRAME_ROWS;
+      frameW = sprite.width / 3;
+      frameH = sprite.height / 2;
       spriteReady = true;
-      init();
+      maybeInit();
     };
 
-    // ----- ИГРОК -----
-    const groundY = VH - 70;
+    bgImg.onload = () => {
+      bgReady = true;
+      maybeInit();
+    };
 
+    rockImg.onload = () => {
+      rockReady = true;
+    };
+
+    function maybeInit() {
+      // запускаем один раз после загрузки спрайта (фон может догрузиться позже)
+      if (!initialized && spriteReady) {
+        initialized = true;
+        resizeCanvas();
+        resetGame();
+        lastTime = performance.now();
+        requestAnimationFrame(loop);
+      }
+    }
+
+    let initialized = false;
+
+    // Игрок
+    const groundY = VH - 70;
     const player = {
       x: 80,
       y: groundY - 90,
@@ -194,7 +284,7 @@
       h: 90,
       vy: 0,
       onGround: true,
-      state: 'run', // run / jump
+      state: 'run', // run | jump
       runFrame: 0,
       jumpFrame: 0,
       frameTime: 0
@@ -203,34 +293,32 @@
     const GRAVITY = 1400;
     const JUMP_VELOCITY = -600;
 
-    // ----- ПРЕПЯТСТВИЯ -----
+    // Объекты
     let obstacles = [];
     let baseSpeed = 260;
     let speed = baseSpeed;
     let spawnTimer = 0;
 
-    // ----- СЧЁТ -----
+    // Фон
+    let bgOffset = 0;
+
+    // Счёт
     let score = 0;
     let best = Number(localStorage.getItem('hatRunnerBest') || 0);
     bestEl.textContent = best;
-    let gameOver = false;
 
-    // ----- ИНИЦИАЛИЗАЦИЯ -----
-    function init() {
-      resizeCanvas();
-      resetGame();
-      lastTime = performance.now();
-      requestAnimationFrame(loop);
-      showMessage('Тап / Space, чтобы прыгнуть. Избегай камней!');
-      setTimeout(() => hideMessage(), 2000);
-    }
+    // Состояния
+    let started = false;
+    let gameOver = true;
 
     function resetGame() {
       obstacles = [];
       score = 0;
       speed = baseSpeed;
-      spawnTimer = 0.5;
+      spawnTimer = 0.8;
+      bgOffset = 0;
       gameOver = false;
+
       player.x = 80;
       player.y = groundY - player.h;
       player.vy = 0;
@@ -239,15 +327,28 @@
       player.runFrame = 0;
       player.jumpFrame = 0;
       player.frameTime = 0;
+
+      hideMessage();
       scoreEl.textContent = '0';
     }
 
-    // ----- КОНТРОЛЫ -----
+    function startGame() {
+      started = true;
+      startScreen.style.display = 'none';
+      resetGame();
+    }
+
+    // Управление
     function doJump() {
-      if (gameOver) {
-        resetGame();
+      if (!spriteReady) return;
+
+      if (!started) {
+        startGame();
+      } else if (gameOver) {
+        startGame();
         return;
       }
+
       if (player.onGround) {
         player.vy = JUMP_VELOCITY;
         player.onGround = false;
@@ -264,108 +365,109 @@
       }
     });
 
-    // Клик мышью
     canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       doJump();
     });
 
-    // Кнопка
     jumpBtn.addEventListener('click', (e) => {
       e.preventDefault();
       doJump();
     });
 
-    // ----- ГЛАВНЫЙ ЦИКЛ -----
+    startBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!started) startGame();
+    });
+
+    // Основной цикл
     let lastTime = 0;
 
     function loop(timestamp) {
-      const dt = Math.min((timestamp - lastTime) / 1000, 0.033); // не больше ~33мс
+      const dt = Math.min((timestamp - lastTime) / 1000, 0.033);
       lastTime = timestamp;
 
       if (spriteReady) {
         update(dt);
         draw();
       }
-
       requestAnimationFrame(loop);
     }
 
-    // ----- ЛОГИКА -----
     function update(dt) {
-      if (!gameOver) {
-        // Увеличиваем сложность
-        speed += dt * 8;
+      if (!started || gameOver) return;
 
-        // Обновляем счёт
-        score += dt * 10;
-        scoreEl.textContent = Math.floor(score);
+      // Усложнение
+      speed += dt * 8;
 
-        // Спавн препятствий
-        spawnTimer -= dt;
-        if (spawnTimer <= 0) {
-          spawnObstacle();
-          spawnTimer = 0.9 + Math.random() * 0.8; // интервал между камнями
+      // Фон
+      if (bgReady) {
+        bgOffset -= speed * 0.4 * dt;
+        if (bgOffset <= -VW) bgOffset += VW;
+      }
+
+      // Счёт
+      score += dt * 10;
+      scoreEl.textContent = Math.floor(score);
+
+      // Препятствия
+      spawnTimer -= dt;
+      if (spawnTimer <= 0) {
+        spawnObstacle();
+        spawnTimer = 0.9 + Math.random() * 0.8;
+      }
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const o = obstacles[i];
+        o.x -= speed * dt;
+        if (o.x + o.w < -40) obstacles.splice(i, 1);
+      }
+
+      // Физика игрока
+      player.vy += GRAVITY * dt;
+      player.y += player.vy * dt;
+
+      if (player.y + player.h >= groundY) {
+        player.y = groundY - player.h;
+        player.vy = 0;
+        if (!player.onGround) {
+          player.onGround = true;
+          player.state = 'run';
+          player.frameTime = 0;
         }
+      }
 
-        // Двигаем препятствия
-        for (let i = obstacles.length - 1; i >= 0; i--) {
-          const o = obstacles[i];
-          o.x -= speed * dt;
-          if (o.x + o.w < -20) {
-            obstacles.splice(i, 1);
-          }
+      // Анимация
+      player.frameTime += dt;
+      if (player.state === 'run') {
+        const runFPS = 10;
+        if (player.frameTime >= 1 / runFPS) {
+          player.frameTime = 0;
+          player.runFrame = (player.runFrame + 1) % 3;
         }
-
-        // Физика прыжка
-        player.vy += GRAVITY * dt;
-        player.y += player.vy * dt;
-
-        if (player.y + player.h >= groundY) {
-          player.y = groundY - player.h;
-          player.vy = 0;
-          if (!player.onGround) {
-            player.onGround = true;
-            player.state = 'run';
-            player.frameTime = 0;
-          }
+      } else if (player.state === 'jump') {
+        const jumpFPS = 8;
+        if (player.frameTime >= 1 / jumpFPS) {
+          player.frameTime = 0;
+          if (player.jumpFrame < 2) player.jumpFrame++;
         }
+      }
 
-        // Анимация спрайта
-        player.frameTime += dt;
-        if (player.state === 'run') {
-          const runFPS = 10;
-          if (player.frameTime >= 1 / runFPS) {
-            player.frameTime = 0;
-            player.runFrame = (player.runFrame + 1) % 3;
-          }
-        } else if (player.state === 'jump') {
-          const jumpFPS = 8;
-          if (player.frameTime >= 1 / jumpFPS) {
-            player.frameTime = 0;
-            if (player.jumpFrame < 2) player.jumpFrame++;
-          }
-        }
-
-        // Проверка столкновений
-        for (const o of obstacles) {
-          if (rectsIntersect(
-            player.x + 10, player.y + 5, player.w - 20, player.h - 10,
-            o.x + 4, o.y + 4, o.w - 8, o.h - 8
-          )) {
-            handleGameOver();
-            break;
-          }
+      // Столкновения
+      for (const o of obstacles) {
+        if (rectsIntersect(
+          player.x + 10, player.y + 5, player.w - 20, player.h - 10,
+          o.x + 4, o.y + 4, o.w - 8, o.h - 8
+        )) {
+          onGameOver();
+          break;
         }
       }
     }
 
     function spawnObstacle() {
-      // Сейчас — простой прямоугольник.
-      // Когда нарисуешь камень, тут можно будет добавить спрайт.
       const size = 42 + Math.random() * 14;
       obstacles.push({
-        x: VW + 30,
+        x: VW + 40,
         y: groundY - size,
         w: size,
         h: size
@@ -381,46 +483,39 @@
       );
     }
 
-    function handleGameOver() {
+    function onGameOver() {
       gameOver = true;
       if (score > best) {
         best = Math.floor(score);
         localStorage.setItem('hatRunnerBest', best);
         bestEl.textContent = best;
-        showMessage('Новый рекорд: ' + best + '! Нажми / тапни, чтобы сыграть ещё.');
+        showMessage('Новый рекорд: ' + best + '! Тап / Space — играть ещё.');
       } else {
-        showMessage('Игра окончена. Счёт: ' + Math.floor(score) + '. Тап / Space для рестарта.');
+        showMessage('Игра окончена. Счёт: ' + Math.floor(score) + '. Тап / Space — рестарт.');
       }
     }
 
-    // ----- ОТРИСОВКА -----
+    // Рисовка
     function drawBackground() {
-      // Лёгкий параллакс
-      const t = performance.now() / 1000;
-      const offsetFar = (t * (speed * 0.1)) % VW;
-      const offsetNear = (t * (speed * 0.25)) % VW;
-
-      // Дальний слой (горизонтальные полосы/тени)
-      ctx.save();
-      ctx.globalAlpha = 0.18;
-      ctx.fillStyle = '#ffffff';
-      for (let i = -1; i < 3; i++) {
-        const x = -offsetFar + i * (VW / 1.2);
-        ctx.fillRect(x, 70, 90, 6);
+      if (bgReady) {
+        // Скроллящийся фон
+        let x = bgOffset % VW;
+        if (x > 0) x -= VW;
+        for (let i = 0; i < 3; i++) {
+          ctx.drawImage(bgImg, x + i * VW, 0, VW, VH);
+        }
+      } else {
+        // Резервный фон, если bg.png нет
+        const grd = ctx.createLinearGradient(0, 0, 0, VH);
+        grd.addColorStop(0, '#3c4c6b');
+        grd.addColorStop(0.4, '#1a2635');
+        grd.addColorStop(0.41, '#101010');
+        grd.addColorStop(1, '#050505');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, VW, VH);
       }
-      ctx.restore();
 
-      // Ближний слой
-      ctx.save();
-      ctx.globalAlpha = 0.14;
-      ctx.fillStyle = '#ffffff';
-      for (let i = -1; i < 4; i++) {
-        const x = -offsetNear + i * (VW / 2.2);
-        ctx.fillRect(x, 130, 60, 5);
-      }
-      ctx.restore();
-
-      // Линия земли
+      // Линия земли поверх фона
       ctx.strokeStyle = '#e53935';
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -430,38 +525,45 @@
     }
 
     function drawObstacles() {
-      ctx.save();
-      ctx.fillStyle = '#222';
-      ctx.strokeStyle = '#ffb74d';
-      ctx.lineWidth = 2;
       for (const o of obstacles) {
-        ctx.beginPath();
-        ctx.roundRect(o.x, o.y, o.w, o.h, 6);
-        ctx.fill();
-        ctx.stroke();
+        if (rockReady) {
+          ctx.drawImage(rockImg, o.x, o.y, o.w, o.h);
+        } else {
+          ctx.save();
+          ctx.fillStyle = '#222';
+          ctx.strokeStyle = '#ffb74d';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(o.x, o.y, o.w, o.h, 6);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
       }
-      ctx.restore();
     }
 
     function drawPlayer() {
       if (!spriteReady) return;
 
-      let sx = 0;
-      let sy = 0;
-
+      let sx = 0, sy = 0;
       if (player.state === 'run') {
         sx = player.runFrame * frameW;
-        sy = 0; // верхняя строка — бег
+        sy = 0;
       } else {
         sx = player.jumpFrame * frameW;
-        sy = frameH; // нижняя строка — прыжок
+        sy = frameH;
       }
 
+      // Зеркалим по горизонтали, чтобы персонаж смотрел вправо
+      ctx.save();
+      ctx.translate(player.x + player.w, 0);
+      ctx.scale(-1, 1);
       ctx.drawImage(
         sprite,
         sx, sy, frameW, frameH,
-        player.x, player.y, player.w, player.h
+        0, player.y, player.w, player.h
       );
+      ctx.restore();
     }
 
     function draw() {
@@ -471,7 +573,7 @@
       drawPlayer();
     }
 
-    // ----- ВСПОМОГАТЕЛЬНЫЕ -----
+    // UI сообщения
     function showMessage(text) {
       messageEl.textContent = text;
       messageEl.style.display = 'block';
