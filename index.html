@@ -5,7 +5,12 @@
   <title>Hat Runner</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       min-height: 100vh;
       display: flex;
@@ -15,6 +20,7 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       color: #fff;
     }
+
     .wrapper {
       width: 100%;
       max-width: 900px;
@@ -24,6 +30,7 @@
       gap: 6px;
       align-items: center;
     }
+
     .ui-top {
       width: 100%;
       display: flex;
@@ -35,14 +42,16 @@
       background: rgba(0,0,0,0.35);
       backdrop-filter: blur(6px);
     }
+
     #game {
       width: 100%;
       border-radius: 14px;
       background: #000;
       box-shadow: 0 10px 25px rgba(0,0,0,0.6);
-      touch-action: none;
+      touch-action: none; /* чтобы тапы были управлением */
       display: block;
     }
+
     .ui-bottom {
       width: 100%;
       display: flex;
@@ -50,6 +59,7 @@
       align-items: center;
       gap: 4px;
     }
+
     #jumpBtn {
       padding: 10px 26px;
       border-radius: 999px;
@@ -65,12 +75,19 @@
       width: 100%;
       max-width: 320px;
     }
+
     #jumpBtn:active {
       transform: translateY(2px);
       box-shadow: 0 2px 6px rgba(0,0,0,0.7);
       background: #c62828;
     }
-    .hint { font-size: 11px; opacity: 0.8; text-align: center; }
+
+    .hint {
+      font-size: 11px;
+      opacity: 0.8;
+      text-align: center;
+    }
+
     .message {
       position: absolute;
       left: 50%;
@@ -84,13 +101,16 @@
       pointer-events: none;
       display: none;
     }
+
     .start-overlay {
       position: absolute;
       inset: 0;
       display: flex;
       align-items: center;
       justify-content: center;
+      pointer-events: auto;
     }
+
     .start-inner {
       background: rgba(0,0,0,0.9);
       padding: 18px 24px;
@@ -100,12 +120,19 @@
       max-width: 260px;
       margin: auto;
     }
+
     .start-inner h1 {
       font-size: 22px;
       margin-bottom: 6px;
       letter-spacing: 0.06em;
     }
-    .start-inner p { font-size: 12px; opacity: 0.85; margin-bottom: 10px; }
+
+    .start-inner p {
+      font-size: 12px;
+      opacity: 0.85;
+      margin-bottom: 10px;
+    }
+
     #startBtn {
       padding: 9px 24px;
       border-radius: 999px;
@@ -119,10 +146,23 @@
       transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s;
       width: 100%;
     }
+
     #startBtn:active {
       transform: translateY(2px);
       box-shadow: 0 2px 6px rgba(0,0,0,0.85);
       background: #c62828;
+    }
+
+    @media (max-width: 480px) {
+      .ui-top {
+        font-size: 12px;
+      }
+      #jumpBtn {
+        font-size: 15px;
+      }
+      .hint {
+        font-size: 10px;
+      }
     }
   </style>
 </head>
@@ -132,9 +172,12 @@
       <div>Счёт: <span id="score">0</span></div>
       <div>Рекорд: <span id="best">0</span></div>
     </div>
+
     <div style="position:relative; width:100%;">
       <canvas id="game"></canvas>
       <div id="message" class="message"></div>
+
+      <!-- Стартовый экран -->
       <div id="startScreen" class="start-overlay">
         <div class="start-inner">
           <h1>HAT RUNNER</h1>
@@ -143,15 +186,19 @@
         </div>
       </div>
     </div>
+
     <div class="ui-bottom">
       <button id="jumpBtn">ПРЫЖОК / TAP</button>
-      <div class="hint">ПК: Space / ↑ / клик по игре • Телефон: кнопка или тап по полю</div>
+      <div class="hint">
+        ПК: Space / ↑ / клик по игре • Телефон: кнопка или тап по полю
+      </div>
     </div>
   </div>
 
   <script>
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
+
     const scoreEl = document.getElementById('score');
     const bestEl = document.getElementById('best');
     const jumpBtn = document.getElementById('jumpBtn');
@@ -159,36 +206,61 @@
     const startScreen = document.getElementById('startScreen');
     const startBtn = document.getElementById('startBtn');
 
-    const VW = 900, VH = 400;
-    let scaleX = 1, scaleY = 1;
+    // Виртуальное поле
+    const VW = 900;
+    const VH = 400;
+    let scaleX = 1;
+    let scaleY = 1;
 
     function resizeCanvas() {
       const maxWidth = Math.min(window.innerWidth - 20, 900);
       const width = maxWidth;
       const height = width * (VH / VW);
+
       const ratio = window.devicePixelRatio || 1;
       canvas.width = width * ratio;
       canvas.height = height * ratio;
       canvas.style.width = width + 'px';
       canvas.style.height = height + 'px';
+
       scaleX = (width * ratio) / VW;
       scaleY = (height * ratio) / VH;
+
       ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
     }
     window.addEventListener('resize', resizeCanvas);
 
+    // Спрайты
     const sprite = new Image();
     sprite.src = 'sprite_sheet_1024x1024.png';
+
     const bgImg = new Image();
     bgImg.src = 'bg.png';
+
     const rockImg = new Image();
     rockImg.src = 'rock.png';
 
-    let spriteReady = false, bgReady = false, rockReady = false;
-    let frameW = 0, frameH = 0;
-    sprite.onload = () => { frameW = sprite.width / 3; frameH = sprite.height / 2; spriteReady = true; maybeInit(); };
-    bgImg.onload = () => { bgReady = true; maybeInit(); };
-    rockImg.onload = () => { rockReady = true; };
+    let spriteReady = false;
+    let bgReady = false;
+    let rockReady = false;
+    let frameW = 0;
+    let frameH = 0;
+
+    sprite.onload = () => {
+      frameW = sprite.width / 3;
+      frameH = sprite.height / 2;
+      spriteReady = true;
+      maybeInit();
+    };
+
+    bgImg.onload = () => {
+      bgReady = true;
+      maybeInit();
+    };
+
+    rockImg.onload = () => {
+      rockReady = true;
+    };
 
     let initialized = false;
     function maybeInit() {
@@ -201,23 +273,80 @@
       }
     }
 
-    const groundY = VH - 10;
-    const player = { x: 100, y: groundY - 130, w: 110, h: 130, vy: 0, onGround: true, state: 'run', runFrame: 0, jumpFrame: 0, frameTime: 0 };
-    const GRAVITY = 1400, JUMP_VELOCITY = -600;
-    let obstacles = [], baseSpeed = 260, speed = baseSpeed, spawnTimer = 0, bgOffset = 0, score = 0;
-    let best = Number(localStorage.getItem('hatRunnerBest') || 0); bestEl.textContent = best;
-    let started = false, gameOver = true;
+    // Игрок
+    const groundY = VH - 70;
+    const player = {
+      x: 80,
+      y: groundY - 90,
+      w: 70,
+      h: 90,
+      vy: 0,
+      onGround: true,
+      state: 'run', // run | jump
+      runFrame: 0,
+      jumpFrame: 0,
+      frameTime: 0
+    };
+
+    const GRAVITY = 1400;
+    const JUMP_VELOCITY = -600;
+
+    // Объекты
+    let obstacles = [];
+    let baseSpeed = 260;
+    let speed = baseSpeed;
+    let spawnTimer = 0;
+
+    // Фон
+    let bgOffset = 0;
+
+    // Счёт
+    let score = 0;
+    let best = Number(localStorage.getItem('hatRunnerBest') || 0);
+    bestEl.textContent = best;
+
+    // Состояния
+    let started = false;
+    let gameOver = true;
 
     function resetGame() {
-      obstacles = []; score = 0; speed = baseSpeed; spawnTimer = 0.8; bgOffset = 0; gameOver = false;
-      player.x = 100; player.y = groundY - player.h; player.vy = 0; player.onGround = true; player.state = 'run';
-      player.runFrame = 0; player.jumpFrame = 0; player.frameTime = 0; hideMessage(); scoreEl.textContent = '0';
+      obstacles = [];
+      score = 0;
+      speed = baseSpeed;
+      spawnTimer = 0.8;
+      bgOffset = 0;
+      gameOver = false;
+
+      player.x = 80;
+      player.y = groundY - player.h;
+      player.vy = 0;
+      player.onGround = true;
+      player.state = 'run';
+      player.runFrame = 0;
+      player.jumpFrame = 0;
+      player.frameTime = 0;
+
+      hideMessage();
+      scoreEl.textContent = '0';
     }
 
-    function startGame() { started = true; startScreen.style.display = 'none'; resetGame(); }
+    function startGame() {
+      started = true;
+      startScreen.style.display = 'none';
+      resetGame();
+    }
+
+    // Управление
     function doJump() {
       if (!spriteReady) return;
-      if (!started) startGame(); else if (gameOver) { startGame(); return; }
+
+      if (!started) {
+        startGame();
+      } else if (gameOver) {
+        startGame();
+        return;
+      }
+
       if (player.onGround) {
         player.vy = JUMP_VELOCITY;
         player.onGround = false;
@@ -227,88 +356,238 @@
       }
     }
 
-    document.addEventListener('keydown', e => {
-      if (['Space','ArrowUp','KeyW'].includes(e.code)) { e.preventDefault(); doJump(); }
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+        e.preventDefault();
+        doJump();
+      }
     });
-    canvas.addEventListener('pointerdown', e => { e.preventDefault(); doJump(); });
-    jumpBtn.addEventListener('click', e => { e.preventDefault(); doJump(); });
-    startBtn.addEventListener('click', e => { e.preventDefault(); if (!started) startGame(); });
 
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      doJump();
+    });
+
+    jumpBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      doJump();
+    });
+
+    startBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!started) startGame();
+    });
+
+    // Основной цикл
     let lastTime = 0;
+
     function loop(timestamp) {
       const dt = Math.min((timestamp - lastTime) / 1000, 0.033);
       lastTime = timestamp;
-      if (spriteReady) { update(dt); draw(); }
+
+      if (spriteReady) {
+        update(dt);
+        draw();
+      }
       requestAnimationFrame(loop);
     }
 
     function update(dt) {
       if (!started || gameOver) return;
+
+      // Усложнение
       speed += dt * 8;
-      bgOffset -= speed * 0.4 * dt;
-      if (bgOffset <= -VW) bgOffset += VW;
-      score += dt * 10; scoreEl.textContent = Math.floor(score);
-      spawnTimer -= dt;
-      if (spawnTimer <= 0) { spawnObstacle(); spawnTimer = 1 + Math.random() * 0.8; }
-      for (let i = obstacles.length - 1; i >= 0; i--) { const o = obstacles[i]; o.x -= speed * dt; if (o.x + o.w < -40) obstacles.splice(i, 1); }
-      player.vy += GRAVITY * dt; player.y += player.vy * dt;
-      if (player.y + player.h >= groundY) {
-        player.y = groundY - player.h; player.vy = 0;
-        if (!player.onGround) { player.onGround = true; player.state = 'run'; player.frameTime = 0; }
+
+      // Фон
+      if (bgReady) {
+        bgOffset -= speed * 0.4 * dt;
+        if (bgOffset <= -VW) bgOffset += VW;
       }
+
+      // Счёт
+      score += dt * 10;
+      scoreEl.textContent = Math.floor(score);
+
+      // Препятствия
+      spawnTimer -= dt;
+      if (spawnTimer <= 0) {
+        spawnObstacle();
+        spawnTimer = 0.9 + Math.random() * 0.8;
+      }
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const o = obstacles[i];
+        o.x -= speed * dt;
+        if (o.x + o.w < -40) obstacles.splice(i, 1);
+      }
+
+      // Физика игрока
+      player.vy += GRAVITY * dt;
+      player.y += player.vy * dt;
+
+      if (player.y + player.h >= groundY) {
+        player.y = groundY - player.h;
+        player.vy = 0;
+        if (!player.onGround) {
+          player.onGround = true;
+          player.state = 'run';
+          player.frameTime = 0;
+        }
+      }
+
+      // Анимация
       player.frameTime += dt;
-      if (player.state === 'run') { const runFPS = 10; if (player.frameTime >= 1 / runFPS) { player.frameTime = 0; player.runFrame = (player.runFrame + 1) % 3; } }
-      else if (player.state === 'jump') { const jumpFPS = 8; if (player.frameTime >= 1 / jumpFPS) { player.frameTime = 0; if (player.jumpFrame < 2) player.jumpFrame++; } }
-      for (const o of obstacles) if (rectsIntersect(player.x+10,player.y+5,player.w-20,player.h-10,o.x+4,o.y+4,o.w-8,o.h-8)) { onGameOver(); break; }
+      if (player.state === 'run') {
+        const runFPS = 10;
+        if (player.frameTime >= 1 / runFPS) {
+          player.frameTime = 0;
+          player.runFrame = (player.runFrame + 1) % 3;
+        }
+      } else if (player.state === 'jump') {
+        const jumpFPS = 8;
+        if (player.frameTime >= 1 / jumpFPS) {
+          player.frameTime = 0;
+          if (player.jumpFrame < 2) player.jumpFrame++;
+        }
+      }
+
+      // Столкновения
+      for (const o of obstacles) {
+        if (rectsIntersect(
+          player.x + 10, player.y + 5, player.w - 20, player.h - 10,
+          o.x + 4, o.y + 4, o.w - 8, o.h - 8
+        )) {
+          onGameOver();
+          break;
+        }
+      }
     }
 
     function spawnObstacle() {
-      const size = 80 + Math.random() * 20;
-      obstacles.push({ x: VW + 40, y: groundY - size, w: size, h: size });
-    }
-    function rectsIntersect(x1,y1,w1,h1,x2,y2,w2,h2){return x1<x2+w2&&x1+w1>x2&&y1<y2+h2&&y1+h1>y2;}
-    function onGameOver() {
-      gameOver = true;
-      if (score > best) { best = Math.floor(score); localStorage.setItem('hatRunnerBest', best); bestEl.textContent = best; showMessage('Новый рекорд: '+best+'! Тап / Space — играть ещё.'); }
-      else showMessage('Игра окончена. Счёт: '+Math.floor(score)+'. Тап / Space — рестарт.');
+      const size = 42 + Math.random() * 14;
+      obstacles.push({
+        x: VW + 40,
+        y: groundY - size,
+        w: size,
+        h: size
+      });
     }
 
+    function rectsIntersect(x1, y1, w1, h1, x2, y2, w2, h2) {
+      return (
+        x1 < x2 + w2 &&
+        x1 + w1 > x2 &&
+        y1 < y2 + h2 &&
+        y1 + h1 > y2
+      );
+    }
+
+    function onGameOver() {
+      gameOver = true;
+      if (score > best) {
+        best = Math.floor(score);
+        localStorage.setItem('hatRunnerBest', best);
+        bestEl.textContent = best;
+        showMessage('Новый рекорд: ' + best + '! Тап / Space — играть ещё.');
+      } else {
+        showMessage('Игра окончена. Счёт: ' + Math.floor(score) + '. Тап / Space — рестарт.');
+      }
+    }
+
+    // Фон
     function drawBackground() {
       if (bgReady) {
         let x = bgOffset % VW;
         if (x > 0) x -= VW;
-        for (let i = 0; i < 3; i++) ctx.drawImage(bgImg, x + i * VW, 0, VW, VH);
-      } else { ctx.fillStyle = '#333'; ctx.fillRect(0,0,VW,VH); }
+        for (let i = 0; i < 3; i++) {
+          ctx.drawImage(bgImg, x + i * VW, 0, VW, VH);
+        }
+      } else {
+        const grd = ctx.createLinearGradient(0, 0, 0, VH);
+        grd.addColorStop(0, '#3c4c6b');
+        grd.addColorStop(0.4, '#1a2635');
+        grd.addColorStop(0.41, '#101010');
+        grd.addColorStop(1, '#050505');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, VW, VH);
+      }
+
+      // Линия земли поверх фона
+      ctx.strokeStyle = '#e53935';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, groundY + 1.5);
+      ctx.lineTo(VW, groundY + 1.5);
+      ctx.stroke();
     }
 
+    // Камни
     function drawObstacles() {
-      for (const o of obstacles)
-        if (rockReady) ctx.drawImage(rockImg, o.x, o.y, o.w, o.h);
-        else { ctx.fillStyle = '#222'; ctx.fillRect(o.x,o.y,o.w,o.h); }
+      for (const o of obstacles) {
+        if (rockReady) {
+          ctx.drawImage(rockImg, o.x, o.y, o.w, o.h);
+        } else {
+          ctx.save();
+          ctx.fillStyle = '#222';
+          ctx.strokeStyle = '#ffb74d';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(o.x, o.y, o.w, o.h, 6);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
     }
 
+    // Персонаж: бег зеркалим, прыжок — как в оригинале
     function drawPlayer() {
       if (!spriteReady) return;
+
       let sx = 0, sy = 0;
-      if (player.state === 'run') { sx = player.runFrame * frameW; sy = 0; }
-      else { sx = player.jumpFrame * frameW; sy = frameH; }
+      if (player.state === 'run') {
+        sx = player.runFrame * frameW;
+        sy = 0;
+      } else {
+        sx = player.jumpFrame * frameW;
+        sy = frameH;
+      }
 
       ctx.save();
       if (player.state === 'run') {
-        // бег зеркалим
+        // Бег: зеркалим вправо
         ctx.translate(player.x + player.w, 0);
         ctx.scale(-1, 1);
-        ctx.drawImage(sprite, sx, sy, frameW, frameH, 0, player.y, player.w, player.h);
+        ctx.drawImage(
+          sprite,
+          sx, sy, frameW, frameH,
+          0, player.y, player.w, player.h
+        );
       } else {
-        // прыжок оригинальный (без зеркала)
-        ctx.drawImage(sprite, sx, sy, frameW, frameH, player.x, player.y, player.w, player.h);
+        // Прыжок: как в оригинале (без зеркала)
+        ctx.drawImage(
+          sprite,
+          sx, sy, frameW, frameH,
+          player.x, player.y, player.w, player.h
+        );
       }
       ctx.restore();
     }
 
-    function draw() { ctx.clearRect(0,0,VW,VH); drawBackground(); drawObstacles(); drawPlayer(); }
-    function showMessage(text){ messageEl.textContent=text; messageEl.style.display='block'; }
-    function hideMessage(){ messageEl.style.display='none'; }
+    function draw() {
+      ctx.clearRect(0, 0, VW, VH);
+      drawBackground();
+      drawObstacles();
+      drawPlayer();
+    }
+
+    function showMessage(text) {
+      messageEl.textContent = text;
+      messageEl.style.display = 'block';
+    }
+
+    function hideMessage() {
+      messageEl.style.display = 'none';
+    }
   </script>
 </body>
 </html>
