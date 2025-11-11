@@ -3,13 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <title>Hat Runner</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       min-height: 100vh;
@@ -48,7 +44,7 @@
       border-radius: 14px;
       background: #000;
       box-shadow: 0 10px 25px rgba(0,0,0,0.6);
-      touch-action: none; /* чтобы тапы были управлением */
+      touch-action: none;
       display: block;
     }
 
@@ -153,20 +149,42 @@
       background: #c62828;
     }
 
+    /* Оверлей "Поверни телефон" */
+    #rotateOverlay {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      color: #fff;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+      z-index: 9999;
+      font-size: 18px;
+      line-height: 1.4;
+    }
+
+    /* Когда портрет — скрываем игру, показываем оверлей */
+    body.portrait .wrapper {
+      display: none;
+    }
+    body.portrait #rotateOverlay {
+      display: flex;
+    }
+
     @media (max-width: 480px) {
-      .ui-top {
-        font-size: 12px;
-      }
-      #jumpBtn {
-        font-size: 15px;
-      }
-      .hint {
-        font-size: 10px;
-      }
+      .ui-top { font-size: 12px; }
+      #jumpBtn { font-size: 15px; }
+      .hint { font-size: 10px; }
     }
   </style>
 </head>
 <body>
+  <div id="rotateOverlay">
+    Поверни телефон в горизонтальное положение<br/>для игры в Hat Runner
+  </div>
+
   <div class="wrapper">
     <div class="ui-top">
       <div>Счёт: <span id="score">0</span></div>
@@ -177,7 +195,6 @@
       <canvas id="game"></canvas>
       <div id="message" class="message"></div>
 
-      <!-- Стартовый экран -->
       <div id="startScreen" class="start-overlay">
         <div class="start-inner">
           <h1>HAT RUNNER</h1>
@@ -205,8 +222,8 @@
     const messageEl = document.getElementById('message');
     const startScreen = document.getElementById('startScreen');
     const startBtn = document.getElementById('startBtn');
+    const rotateOverlay = document.getElementById('rotateOverlay');
 
-    // Виртуальное поле
     const VW = 900;
     const VH = 400;
     let scaleX = 1;
@@ -228,7 +245,20 @@
 
       ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
     }
-    window.addEventListener('resize', resizeCanvas);
+
+    function handleOrientation() {
+      const isPortrait = window.innerHeight > window.innerWidth;
+      if (isPortrait) {
+        document.body.classList.add('portrait');
+      } else {
+        document.body.classList.remove('portrait');
+        resizeCanvas();
+      }
+    }
+
+    window.addEventListener('resize', handleOrientation);
+    window.addEventListener('orientationchange', handleOrientation);
+    window.addEventListener('load', handleOrientation);
 
     // Спрайты
     const sprite = new Image();
@@ -266,7 +296,7 @@
     function maybeInit() {
       if (!initialized && spriteReady) {
         initialized = true;
-        resizeCanvas();
+        handleOrientation();
         resetGame();
         lastTime = performance.now();
         requestAnimationFrame(loop);
@@ -385,7 +415,7 @@
       const dt = Math.min((timestamp - lastTime) / 1000, 0.033);
       lastTime = timestamp;
 
-      if (spriteReady) {
+      if (spriteReady && !document.body.classList.contains('portrait')) {
         update(dt);
         draw();
       }
@@ -511,7 +541,7 @@
         ctx.fillRect(0, 0, VW, VH);
       }
 
-      // Линия земли поверх фона
+      // Линия земли
       ctx.strokeStyle = '#e53935';
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -539,7 +569,7 @@
       }
     }
 
-    // Персонаж: бег зеркалим, прыжок — как в оригинале
+    // Персонаж: бег зеркалим, прыжок — оригинал
     function drawPlayer() {
       if (!spriteReady) return;
 
@@ -554,21 +584,11 @@
 
       ctx.save();
       if (player.state === 'run') {
-        // Бег: зеркалим вправо
         ctx.translate(player.x + player.w, 0);
         ctx.scale(-1, 1);
-        ctx.drawImage(
-          sprite,
-          sx, sy, frameW, frameH,
-          0, player.y, player.w, player.h
-        );
+        ctx.drawImage(sprite, sx, sy, frameW, frameH, 0, player.y, player.w, player.h);
       } else {
-        // Прыжок: как в оригинале (без зеркала)
-        ctx.drawImage(
-          sprite,
-          sx, sy, frameW, frameH,
-          player.x, player.y, player.w, player.h
-        );
+        ctx.drawImage(sprite, sx, sy, frameW, frameH, player.x, player.y, player.w, player.h);
       }
       ctx.restore();
     }
